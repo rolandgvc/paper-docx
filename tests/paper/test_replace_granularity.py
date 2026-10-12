@@ -102,6 +102,36 @@ class DescribeReplaceGranularity:
         assert reopened.paragraphs[0].text == "Term. Twelve (12) months from the Effective Date."
         assert result.preserved_formatting_regions
 
+    @pytest.mark.parametrize("tracked", [False, True])
+    @pytest.mark.parametrize("prefix", ["", "The "])
+    @pytest.mark.parametrize("suffix", [" is due.", " is d"])
+    def it_keeps_word_boundaries_across_formatting_regions(
+        self, tmp_path: Path, tracked: bool, prefix: str, suffix: str
+    ):
+        document = docx.Document()
+        paragraph = document.add_paragraph(prefix)
+        paragraph.add_run("pay").bold = True
+        paragraph.add_run("ment" + suffix).italic = True
+        paragraph.add_run("ue." if suffix == " is d" else "")
+
+        find_one(document, prefix + "payment is due.").replace(
+            prefix + "payments is due.",
+            tracked=tracked,
+            author="Reviewer" if tracked else None,
+            date=FROZEN,
+            granularity="word",
+        )
+        reopened = save_and_reopen(document, tmp_path / "out.docx")
+
+        if tracked:
+            assert "".join(_revision_text(reopened, "w:del")) == "payment"
+            assert _revision_text(reopened, "w:ins") == ["payments"]
+        else:
+            assert reopened.paragraphs[0].text == prefix + "payments is due."
+        suffix_runs = [run for run in reopened.paragraphs[0].runs if run.text == suffix]
+        assert len(suffix_runs) == 1
+        assert suffix_runs[0].italic is True
+
     def it_refuses_an_unknown_granularity_before_changing_anything(self):
         document = docx.Document()
         document.add_paragraph("Two (2) years")

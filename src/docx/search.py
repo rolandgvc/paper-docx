@@ -643,7 +643,8 @@ def _ordinary_outcome(
     else:
         segments = writable_segments(changed_start, changed_end)
         changed_atoms = [span._atoms[index] for index, _start, _end in segments]
-        if replacement and _has_multiple_direct_rpr(changed_atoms):
+        # Word snapping already defines the edit boundary, even within a run.
+        if granularity == "character" and replacement and _has_multiple_direct_rpr(changed_atoms):
             # A shared suffix character is not formatting intent. If the
             # narrowed changed interval already crosses direct run-property
             # regions, consume the remaining selected fragment of its final
@@ -1064,7 +1065,13 @@ class Span:
             if start_idx is None or end_idx is None:
                 return None
         sub_atoms = self._atoms[start_idx : end_idx + 1]
-        if changed_new and changed_old and _has_multiple_direct_rpr(sub_atoms):
+        # Preserve word boundaries when the final changed run also holds suffix text.
+        if (
+            granularity == "character"
+            and changed_new
+            and changed_old
+            and _has_multiple_direct_rpr(sub_atoms)
+        ):
             # Keep retained prefix atoms outside the tracked edit. Expand only
             # through the selected fragment of the final changed atom so the
             # ordinary planner can apply match-start formatting without
